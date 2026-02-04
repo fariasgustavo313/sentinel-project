@@ -19,7 +19,7 @@ public class SentinelApplication {
 	public CommandLineRunner run(ContainerService containerService) {
 		return args -> {
 			// esto se ejecuta justo despues de que arranca la app
-			containerService.listarcontenedores();
+			containerService.monitorearContenedores();
 		};
 	}
 

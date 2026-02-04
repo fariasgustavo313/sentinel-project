@@ -5,6 +5,8 @@ services:
   app-test:
     image: nginxdemos/hello:latest
     container_name: paciente-uno
+    labels:
+      - "sentinel.auto-heal=true"
     ports:
       - "8081:80"
     healthcheck:
