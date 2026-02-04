@@ -10,4 +10,5 @@ public class ContainerStatusDTO {
     private String nombre;
     private String estado;
     private String id;
+    private boolean protegido;
 }

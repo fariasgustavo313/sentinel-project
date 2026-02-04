@@ -8,29 +8,26 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
     <style>
-        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
         .status-running { animation: pulse-green 2s infinite; }
         body { background: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
         .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); }
+        .card-manual { opacity: 0.8; border-style: dashed; }
     </style>
 </head>
 <body class="p-8">
-
 <div id="toast-container" class="fixed bottom-5 right-5 z-50"></div>
 
 <div class="max-w-6xl mx-auto">
     <header class="flex justify-between items-center mb-12 border-b border-slate-700 pb-6">
         <div>
-            <h1 class="text-4xl font-bold text-blue-400 tracking-tight">SENTINEL <span class="text-slate-500 text-lg font-mono">v1.0</span></h1>
-            <p class="text-slate-400">Panel de Control de Resiliencia</p>
+            <h1 class="text-4xl font-bold text-blue-400 tracking-tight">SENTINEL <span class="text-slate-500 text-lg font-mono">v1.1</span></h1>
+            <p class="text-slate-400">Panel de Resiliencia Selectiva</p>
         </div>
-        <div id="connection-status" class="px-4 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-500/50 text-sm transition-all duration-500">
-            Desconectado
-        </div>
+        <div id="connection-status" class="px-4 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-500/50 text-sm">Desconectado</div>
     </header>
 
-    <div id="container-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-    </div>
+    <div id="container-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
 </div>
 
 <script>
@@ -40,33 +37,20 @@
         const socket = new SockJS('/sentinel-websocket');
         stompClient = Stomp.over(socket);
         stompClient.debug = null;
-
-        stompClient.connect({}, function (frame) {
+        stompClient.connect({}, () => {
             updateStatusBadge(true);
-            stompClient.subscribe('/topic/containers', function (message) {
-                updateContainerCard(JSON.parse(message.body));
-            });
-        }, function(error) {
+            stompClient.subscribe('/topic/containers', (msg) => updateContainerCard(JSON.parse(msg.body)));
+        }, () => {
             updateStatusBadge(false);
-            setTimeout(connect, 5000); // Reintento automático
+            setTimeout(connect, 5000);
         });
     }
 
     function updateStatusBadge(connected) {
         const el = document.getElementById('connection-status');
-        if(connected) {
-            el.innerText = 'En Línea';
-            el.className = "px-4 py-1 rounded-full bg-green-900/30 text-green-400 border border-green-500/50 text-sm";
-        } else {
-            el.innerText = 'Desconectado';
-            el.className = "px-4 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-500/50 text-sm";
-        }
-    }
-
-    function apagarContenedor(id, nombre) {
-        showToast(`Enviando señal de parada a ${nombre}...`, 'blue');
-        fetch(`/api/containers/${id}/stop`, { method: 'POST' })
-            .catch(err => showToast('Error al conectar con el API', 'red'));
+        el.innerText = connected ? 'En Línea' : 'Desconectado';
+        el.className = connected ? "px-4 py-1 rounded-full bg-green-900/30 text-green-400 border border-green-500/50 text-sm"
+                                 : "px-4 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-500/50 text-sm";
     }
 
     function showToast(message, color) {
@@ -89,38 +73,53 @@
         }
 
         const isRunning = container.estado === 'running';
-        const statusColor = isRunning ? 'text-green-400' : 'text-red-400';
-        const bgColor = isRunning ? 'border-green-500/30' : 'border-red-500/30';
+        const isRestarting = container.estado === 'restarting';
         const pulseClass = isRunning ? 'status-running' : '';
-        const nombreLimpio = container.nombre.replace('/', '');
 
-        // Detectar si Sentinel acaba de revivirlo (si el estado cambia de exited a running)
-        const oldState = card.getAttribute('data-state');
-        if (oldState === 'exited' && isRunning) {
-            showToast(`🚀 Sentinel ha recuperado ${nombreLimpio}`, 'green');
+        const statusColor = isRunning ? 'text-green-400' : (isRestarting ? 'text-yellow-400' : 'text-red-400');
+        const borderColor = isRunning ? 'border-green-500/30' : (container.protegido ? 'border-blue-500/30' : 'border-slate-500/30');
+
+        let accionHTML = '';
+        if (isRunning) {
+            accionHTML = `
+                <button onclick="fetch('/api/containers/${container.id}/stop', {method:'POST'})"
+                        class="text-[10px] bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/50 px-2 py-1 rounded transition-colors uppercase font-bold">
+                    Kill Service
+                </button>`;
+        } else {
+            if (container.protegido) {
+                accionHTML = '<span class="text-[14px] text-blue-400 animate-pulse font-mono italic">Sentinel recuperando...</span>';
+            } else {
+                accionHTML = '<span class="text-[14px] text-slate-500 font-mono italic">Requiere arreglo manual</span>';
+            }
         }
-        card.setAttribute('data-state', container.estado);
 
-        card.className = `p-6 rounded-xl border ${bgColor} glass transition-all duration-500 hover:scale-[1.02]`;
+        const badgeProteccion = container.protegido ?
+            '<span class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-md border border-blue-500/30 font-bold tracking-widest">SENTINEL ACTIVE</span>' :
+            '<span class="text-[10px] bg-slate-700/50 text-slate-400 px-2 py-1 rounded-md border border-slate-600 font-medium">MANUAL MODE</span>';
+
+        card.className = `p-6 rounded-xl border ${borderColor} glass transition-all duration-500 ${!container.protegido ? 'card-manual' : 'hover:scale-[1.02]'}`;
+
         card.innerHTML = `
-            <div class="flex justify-between items-start mb-4">
-                <h3 class="text-xl font-semibold truncate w-40">${nombreLimpio}</h3>
-                <span class="h-3 w-3 rounded-full ${isRunning ? 'bg-green-500' : 'bg-red-500'} ${pulseClass}"></span>
+            <div class="flex justify-between items-start mb-2">
+                <h3 class="text-xl font-semibold truncate w-40">${container.nombre}</h3>
+                <span class="h-3 w-3 rounded-full ${isRunning ? 'bg-green-500' : (isRestarting ? 'bg-yellow-500' : 'bg-red-500')} ${pulseClass}"></span>
             </div>
-            <p class="text-sm text-slate-500 font-mono mb-6">ID: ${container.id.substring(0, 12)}</p>
+            <div class="mb-4">${badgeProteccion}</div>
 
-            <div class="flex items-center justify-between">
-                <span class="text-xs uppercase tracking-widest font-black ${statusColor}">${container.estado}</span>
-                ${isRunning ? `
-                    <button onclick="apagarContenedor('${container.id}', '${nombreLimpio}')"
-                            class="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/50 px-3 py-1 rounded transition-colors">
-                        FORZAR CAÍDA
-                    </button>
-                ` : '<span class="text-xs text-slate-500 italic">Reiniciando...</span>'}
+            <div class="bg-black/30 border border-white/5 rounded-md p-2 mb-6">
+                <p class="text-[10px] text-slate-400 font-mono italic tracking-tight uppercase opacity-70 mb-1">Instance Identifier</p>
+                <p class="text-xs text-blue-300 font-mono font-bold uppercase truncate">${container.id.substring(0, 16)}</p>
+            </div>
+
+            <div class="flex items-center justify-between border-t border-white/5 pt-4">
+                <span class="text-lg uppercase tracking-wider font-black ${statusColor} italic">
+                    ${container.estado}
+                </span>
+                ${accionHTML}
             </div>
         `;
     }
-
     connect();
 </script>
 </body>

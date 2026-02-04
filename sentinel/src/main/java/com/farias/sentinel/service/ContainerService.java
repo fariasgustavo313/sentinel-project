@@ -28,22 +28,24 @@ public class ContainerService {
         List<Container> containers = dockerClient.listContainersCmd().withShowAll(true).exec();
 
         for (Container container : containers) {
-            String nombre = container.getNames()[0];
             String estado = container.getState();
 
-            // 1. Obtenemos las etiquetas del contenedor
+            // si el contenedor esta recien creado, se ignora
+            // hasta que tenga un estado (running o exited)
+            if (estado.equalsIgnoreCase("created")) continue;
+
+            String nombre = container.getNames()[0].replace("/", "");
+            // Obtenemos las etiquetas del contenedor
             java.util.Map<String, String> labels = container.getLabels();
+            boolean esProtegido = labels.containsKey("sentinel.auto-heal") &&
+                    labels.get("sentinel.auto-heal").equals("true");
 
-            // 2. Enviamos los datos al Dashboard (todos se ven, pero no todos se curan)
+            // Enviamos los datos al Dashboard con la marca de proteccion
             messagingTemplate.convertAndSend("/topic/containers",
-                    new ContainerStatusDTO(nombre, estado, container.getId()));
+                    new ContainerStatusDTO(nombre, estado, container.getId(), esProtegido));
 
-            // 3. Lógica de Self-Healing Selectiva
-            // Solo revivimos si tiene la etiqueta y no está corriendo
-            if (labels.containsKey("sentinel.auto-heal") &&
-                    labels.get("sentinel.auto-heal").equals("true") &&
-                    !estado.equals("running")) {
-
+            // logica de self-healting: solo si es protegido y esta realmente caido
+            if (esProtegido && estado.equalsIgnoreCase("exited")) {
                 revivirContenedor(container.getId(), nombre);
             }
         }
@@ -52,13 +54,11 @@ public class ContainerService {
     private void revivirContenedor(String containerId, String nombre) {
         try {
             dockerClient.restartContainerCmd(containerId).exec();
-
             // notificacion a Slack
             String alerta = "*Sentinel Self-Healing Report*\n" +
                     "Contenedor restaurado: `" + nombre + "`\n" +
                     "ID: `" + containerId.substring(0, 12) + "`\n" +
                     "Estado: Disponibilidad recuperada automáticamente.";
-
             slackService.enviarNotificacion(alerta);
         } catch (Exception e) {
             slackService.enviarNotificacion("*ERROR:* Falló el intento de reinicio en `" + nombre + "`");

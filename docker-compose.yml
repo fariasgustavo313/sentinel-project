@@ -14,3 +14,51 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+
+  app-test2:
+    image: nginxdemos/hello:latest
+    container_name: paciente-dos
+    labels:
+      - "sentinel.auto-heal=true"
+    ports:
+      - "8082:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  app-test3:
+    image: nginxdemos/hello:latest
+    container_name: paciente-tres
+    ports:
+      - "8083:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  app-test4:
+    image: nginxdemos/hello:latest
+    container_name: paciente-cuatro
+    labels:
+      - "sentinel.auto-heal=true"
+    ports:
+      - "8084:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  app-test5:
+    image: nginxdemos/hello:latest
+    container_name: paciente-cinco
+    ports:
+      - "8085:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
