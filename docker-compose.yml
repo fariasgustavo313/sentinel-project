@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  # Este es el servicio que vamos a monitorear (El Paciente)
+  app-test:
+    image: nginxdemos/hello:latest
+    container_name: paciente-uno
+    ports:
+      - "8081:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
