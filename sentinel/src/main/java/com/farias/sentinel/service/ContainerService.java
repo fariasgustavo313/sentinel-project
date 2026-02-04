@@ -15,10 +15,12 @@ public class ContainerService {
 
     private final DockerClient dockerClient;
     private final SimpMessagingTemplate messagingTemplate;
+    private final SlackService slackService;
 
-    public ContainerService(DockerClient dockerClient, SimpMessagingTemplate messagingTemplate) {
+    public ContainerService(DockerClient dockerClient, SimpMessagingTemplate messagingTemplate, SlackService slackService) {
         this.dockerClient = dockerClient;
         this.messagingTemplate = messagingTemplate;
+        this.slackService = slackService;
     }
 
     @Scheduled(fixedRate = 5000)
@@ -42,18 +44,24 @@ public class ContainerService {
                     labels.get("sentinel.auto-heal").equals("true") &&
                     !estado.equals("running")) {
 
-                revivirContenedor(container.getId());
+                revivirContenedor(container.getId(), nombre);
             }
         }
     }
 
-    private void revivirContenedor(String containerId) {
-        System.out.println("Intentando revivir el contenedor: " + containerId + "...");
+    private void revivirContenedor(String containerId, String nombre) {
         try {
             dockerClient.restartContainerCmd(containerId).exec();
-            System.out.println("Contenedor reiniciado con exito!");
+
+            // notificacion a Slack
+            String alerta = "*Sentinel Self-Healing Report*\n" +
+                    "Contenedor restaurado: `" + nombre + "`\n" +
+                    "ID: `" + containerId.substring(0, 12) + "`\n" +
+                    "Estado: Disponibilidad recuperada automáticamente.";
+
+            slackService.enviarNotificacion(alerta);
         } catch (Exception e) {
-            System.err.println("Error al intentar reiniciar: " + e.getMessage());
+            slackService.enviarNotificacion("*ERROR:* Falló el intento de reinicio en `" + nombre + "`");
         }
     }
 }
