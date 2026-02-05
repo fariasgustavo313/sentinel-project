@@ -28,6 +28,23 @@
     </header>
 
     <div id="container-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+
+    <div class="mt-16">
+        <h2 class="text-2xl font-bold text-slate-400 mb-6 flex items-center">
+            <span class="mr-3">📋</span> Historial de Incidentes Recientes
+        </h2>
+        <div id="event-log" class="glass rounded-2xl overflow-hidden border border-slate-700">
+            <div class="p-4 bg-slate-800/50 border-b border-slate-700 grid grid-cols-4 text-xs font-black uppercase tracking-widest text-slate-500">
+                <div>Timestamp</div>
+                <div>Contenedor</div>
+                <div>Evento</div>
+                <div>Detalle</div>
+            </div>
+            <div id="event-rows" class="divide-y divide-slate-800">
+                <div class="p-4 text-center text-slate-500 italic text-sm">Esperando registros...</div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -87,11 +104,9 @@
                     Kill Service
                 </button>`;
         } else {
-            if (container.protegido) {
-                accionHTML = '<span class="text-[14px] text-blue-400 animate-pulse font-mono italic">Sentinel recuperando...</span>';
-            } else {
-                accionHTML = '<span class="text-[14px] text-slate-500 font-mono italic">Requiere arreglo manual</span>';
-            }
+            accionHTML = container.protegido ?
+                '<span class="text-[14px] text-blue-400 animate-pulse font-mono italic">Sentinel recuperando...</span>' :
+                '<span class="text-[14px] text-slate-500 font-mono italic">Requiere arreglo manual</span>';
         }
 
         const badgeProteccion = container.protegido ?
@@ -120,6 +135,39 @@
             </div>
         `;
     }
+
+    async function loadRecentEvents() {
+        try {
+            const response = await fetch('/api/events/recent');
+            if (!response.ok) return;
+            const events = await response.json();
+            const container = document.getElementById('event-rows');
+
+            if (events.length === 0) return;
+
+            container.innerHTML = events.map(ev => {
+                const date = new Date(ev.timestamp).toLocaleString();
+                const colorClass = ev.eventType === 'FAILURE' ? 'text-red-400' :
+                                   ev.eventType === 'RECOVERY' ? 'text-green-400' :
+                                   ev.eventType === 'CRITICAL_ERROR' ? 'text-yellow-500' : 'text-blue-400';
+
+                return `
+                    <div class="grid grid-cols-4 p-4 text-sm font-mono items-center hover:bg-white/5 transition-colors">
+                        <div class="text-slate-500 text-[11px]">${date}</div>
+                        <div class="font-bold text-white uppercase truncate pr-2">${ev.containerName}</div>
+                        <div class="${colorClass} font-black text-[10px] tracking-widest">${ev.eventType}</div>
+                        <div class="text-slate-400 text-xs italic truncate">${ev.details}</div>
+                    </div>
+                `;
+            }).join('');
+        } catch (error) {
+            console.error("Error cargando eventos:", error);
+        }
+    }
+
+    // Configuración de intervalos y carga inicial
+    setInterval(loadRecentEvents, 10000);
+    loadRecentEvents();
     connect();
 </script>
 </body>
