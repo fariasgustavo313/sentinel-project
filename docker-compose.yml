@@ -15,6 +15,14 @@ services:
       timeout: 5s
       retries: 3
 
+  app-corrupta:
+    image: alpine
+    container_name: app-corrupta
+    # Este comando hace que el contenedor muera 2 segundos después de iniciar
+    command: sh -c "sleep 2 && exit 1"
+    labels:
+      - "sentinel.auto-heal=true"
+
   app-test2:
     image: nginxdemos/hello:latest
     container_name: paciente-dos

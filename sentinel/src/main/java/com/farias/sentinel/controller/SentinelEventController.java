@@ -1,8 +1,7 @@
 package com.farias.sentinel.controller;
 
-import com.farias.sentinel.model.SentinelEvent;
+import com.farias.sentinel.model.ContainerEvent;
 import com.farias.sentinel.service.SentinelEventService;
-import jdk.dynalink.linker.LinkerServices;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,7 +17,7 @@ public class SentinelEventController {
     private SentinelEventService sentinelEventService;
 
     @GetMapping("/recent")
-    public List<SentinelEvent> getRecentEvents() {
+    public List<ContainerEvent> getRecentEvents() {
         return sentinelEventService.getRecentEvents();
     }
 }

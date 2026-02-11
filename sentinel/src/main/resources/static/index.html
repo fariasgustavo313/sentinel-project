@@ -9,10 +9,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
     <style>
         @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); } 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); } }
         .status-running { animation: pulse-green 2s infinite; }
+        .status-blocked { animation: pulse-red 1.5s infinite; }
         body { background: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
         .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); }
         .card-manual { opacity: 0.8; border-style: dashed; }
+        .card-blocked { border-color: #ef4444 !important; background: rgba(127, 29, 29, 0.2); }
     </style>
 </head>
 <body class="p-8">
@@ -21,8 +24,8 @@
 <div class="max-w-6xl mx-auto">
     <header class="flex justify-between items-center mb-12 border-b border-slate-700 pb-6">
         <div>
-            <h1 class="text-4xl font-bold text-blue-400 tracking-tight">SENTINEL <span class="text-slate-500 text-lg font-mono">v1.1</span></h1>
-            <p class="text-slate-400">Panel de Resiliencia Selectiva</p>
+            <h1 class="text-4xl font-bold text-blue-400 tracking-tight">SENTINEL <span class="text-slate-500 text-lg font-mono">v1.2</span></h1>
+            <p class="text-slate-400">Panel de Resiliencia y Monitoreo de Recursos</p>
         </div>
         <div id="connection-status" class="px-4 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-500/50 text-sm">Desconectado</div>
     </header>
@@ -70,15 +73,6 @@
                                  : "px-4 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-500/50 text-sm";
     }
 
-    function showToast(message, color) {
-        const container = document.getElementById('toast-container');
-        const toast = document.createElement('div');
-        toast.className = `mb-3 px-6 py-3 rounded-lg glass border-${color}-500/50 text-${color}-400 shadow-xl border animate-bounce`;
-        toast.innerText = message;
-        container.appendChild(toast);
-        setTimeout(() => toast.remove(), 4000);
-    }
-
     function updateContainerCard(container) {
         const grid = document.getElementById('container-grid');
         let card = document.getElementById(`card-${container.id}`);
@@ -91,13 +85,22 @@
 
         const isRunning = container.estado === 'running';
         const isRestarting = container.estado === 'restarting';
-        const pulseClass = isRunning ? 'status-running' : '';
+        const isBlocked = container.blocked;
 
-        const statusColor = isRunning ? 'text-green-400' : (isRestarting ? 'text-yellow-400' : 'text-red-400');
-        const borderColor = isRunning ? 'border-green-500/30' : (container.protegido ? 'border-blue-500/30' : 'border-slate-500/30');
+        // Lógica para alertas de consumo de RAM (Umbral: 500MB)
+        const memUsageRaw = container.memUsage ? parseInt(container.memUsage.replace("MB", "")) : 0;
+        const memClass = (isRunning && memUsageRaw > 500) ? "text-red-500 animate-pulse font-bold" : "text-purple-400";
+
+        const pulseClass = isBlocked ? 'status-blocked' : (isRunning ? 'status-running' : '');
+        const statusColor = isBlocked ? 'text-red-600' : (isRunning ? 'text-green-400' : (isRestarting ? 'text-yellow-400' : 'text-red-400'));
+
+        let borderColor = isRunning ? 'border-green-500/30' : (container.protegido ? 'border-blue-500/30' : 'border-slate-500/30');
+        if (isBlocked) borderColor = 'border-red-600';
 
         let accionHTML = '';
-        if (isRunning) {
+        if (isBlocked) {
+            accionHTML = '<span class="text-[12px] text-red-500 font-black uppercase tracking-tighter">⚠️ Bloqueado por Seguridad</span>';
+        } else if (isRunning) {
             accionHTML = `
                 <button onclick="fetch('/api/containers/${container.id}/stop', {method:'POST'})"
                         class="text-[10px] bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/50 px-2 py-1 rounded transition-colors uppercase font-bold">
@@ -113,23 +116,38 @@
             '<span class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-md border border-blue-500/30 font-bold tracking-widest">SENTINEL ACTIVE</span>' :
             '<span class="text-[10px] bg-slate-700/50 text-slate-400 px-2 py-1 rounded-md border border-slate-600 font-medium">MANUAL MODE</span>';
 
-        card.className = `p-6 rounded-xl border ${borderColor} glass transition-all duration-500 ${!container.protegido ? 'card-manual' : 'hover:scale-[1.02]'}`;
+        card.className = `p-6 rounded-xl border ${borderColor} glass transition-all duration-500 ${!container.protegido ? 'card-manual' : 'hover:scale-[1.02]'} ${isBlocked ? 'card-blocked' : ''}`;
+
+        // Definimos los valores de recursos (si no hay datos o el contenedor está parado, mostramos 0)
+        const cpuVal = isRunning ? (container.cpuUsage || "0.00%") : "---";
+        const memVal = isRunning ? (container.memUsage || "0MB") : "---";
 
         card.innerHTML = `
             <div class="flex justify-between items-start mb-2">
                 <h3 class="text-xl font-semibold truncate w-40">${container.nombre}</h3>
-                <span class="h-3 w-3 rounded-full ${isRunning ? 'bg-green-500' : (isRestarting ? 'bg-yellow-500' : 'bg-red-500')} ${pulseClass}"></span>
+                <span class="h-3 w-3 rounded-full ${isBlocked ? 'bg-red-600' : (isRunning ? 'bg-green-500' : (isRestarting ? 'bg-yellow-500' : 'bg-red-500'))} ${pulseClass}"></span>
             </div>
             <div class="mb-4">${badgeProteccion}</div>
 
-            <div class="bg-black/30 border border-white/5 rounded-md p-2 mb-6">
-                <p class="text-[10px] text-slate-400 font-mono italic tracking-tight uppercase opacity-70 mb-1">Instance Identifier</p>
-                <p class="text-xs text-blue-300 font-mono font-bold uppercase truncate">${container.id.substring(0, 16)}</p>
+            <div class="grid grid-cols-2 gap-2 mb-4">
+                <div class="bg-black/40 border border-white/5 rounded-lg p-2 text-center">
+                    <p class="text-[9px] text-slate-500 font-bold uppercase tracking-wider">CPU Usage</p>
+                    <p class="text-sm font-mono font-black text-blue-400">${cpuVal}</p>
+                </div>
+                <div class="bg-black/40 border border-white/5 rounded-lg p-2 text-center">
+                    <p class="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Memory</p>
+                    <p class="text-sm font-mono font-black ${memClass}">${memVal}</p>
+                </div>
+            </div>
+
+            <div class="bg-black/20 border border-white/5 rounded-md p-2 mb-6">
+                <p class="text-[10px] text-slate-500 font-mono italic tracking-tight uppercase opacity-60 mb-1">Instance Identifier</p>
+                <p class="text-xs text-slate-300 font-mono truncate">${container.id.substring(0, 16)}</p>
             </div>
 
             <div class="flex items-center justify-between border-t border-white/5 pt-4">
                 <span class="text-lg uppercase tracking-wider font-black ${statusColor} italic">
-                    ${container.estado}
+                    ${isBlocked ? 'CRITICAL_FAIL' : container.estado}
                 </span>
                 ${accionHTML}
             </div>
@@ -165,7 +183,6 @@
         }
     }
 
-    // Configuración de intervalos y carga inicial
     setInterval(loadRecentEvents, 10000);
     loadRecentEvents();
     connect();

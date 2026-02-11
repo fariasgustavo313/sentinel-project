@@ -1,6 +1,6 @@
 package com.farias.sentinel.service;
 
-import com.farias.sentinel.model.SentinelEvent;
+import com.farias.sentinel.model.ContainerEvent;
 import com.farias.sentinel.repository.SentinelEventRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -17,7 +17,7 @@ public class SentinelEventService {
     private SentinelEventRepository sentinelEventRepository;
 
     public void registrarEvento(String nombre, String id, String tipo, String detalle) {
-        SentinelEvent evento = new SentinelEvent();
+        ContainerEvent evento = new ContainerEvent();
         evento.setContainerName(nombre);
         evento.setContainerId(id);
         evento.setEventType(tipo);
@@ -27,7 +27,7 @@ public class SentinelEventService {
         sentinelEventRepository.save(evento);
     }
 
-    public List<SentinelEvent> getRecentEvents() {
+    public List<ContainerEvent> getRecentEvents() {
         // obtengo los ultimos 10 eventos ordenados por fecha descendente
         return sentinelEventRepository.findAll(
                 PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "timestamp"))

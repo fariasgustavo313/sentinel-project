@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Data
-public class SentinelEvent {
+public class ContainerEvent {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -21,4 +21,5 @@ public class SentinelEvent {
     private String eventType; // FAILURE, RECOVERY, CRITICAL_STOP
     private LocalDateTime timestamp;
     private String details; // Ejemplo: reinicio automatico exitoso
+    private Integer retryCount = 0;
 }
